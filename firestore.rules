@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsPlayer(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /players/{uid} {
+      allow read, create, update: if ownsPlayer(uid);
+      allow delete: if false;
+    }
+
+    match /players/{uid}/inventory/{itemId} {
+      allow read, write: if ownsPlayer(uid);
+    }
+
+    match /players/{uid}/monsters/{monsterId} {
+      allow read, write: if ownsPlayer(uid);
+    }
+
+    match /players/{uid}/achievements/{achievementId} {
+      allow read, write: if ownsPlayer(uid);
+    }
+
+    match /gameCatalog/{gameId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

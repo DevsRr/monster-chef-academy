@@ -1,0 +1,33 @@
+{
+  "rules": {
+    ".read": true,
+    "admins": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "analytics": {
+      ".read": true,
+      ".write": true
+    },
+    "siteContent": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+    "projects": {
+      ".read": true,
+      "$projectId": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+        ".validate": "newData.hasChildren(['title','slug','summary','description','image','technologies','liveUrl','repoUrl'])"
+      }
+    },
+    "messages": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$messageId": {
+        ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || !data.exists())",
+        ".validate": "newData.hasChildren(['name','email','subject','message']) || !newData.exists()"
+      }
+    }
+  }
+}

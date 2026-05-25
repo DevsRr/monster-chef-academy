@@ -1,0 +1,33 @@
+export const gamesConfig = [
+  {
+    id: "monster-chef-academy",
+    title: "Monster Chef Academy",
+    description: "Train funny monsters with memory, matching, counting, sequencing, and speed cooking games.",
+    difficulty: "Starter",
+    path: "games/monster-chef-academy",
+    icon: "chef",
+    color: "from-accent via-emerald-300 to-gold",
+    enabled: true,
+    featured: true,
+  },
+  {
+    id: "space-shape-lab",
+    title: "Space Shape Lab",
+    description: "Coming soon: build rockets with pattern and geometry puzzles.",
+    difficulty: "Soon",
+    path: "games/space-shape-lab",
+    icon: "rocket",
+    color: "from-indigo-400 via-sky-300 to-accent",
+    enabled: false,
+  },
+  {
+    id: "jungle-rhythm-rescue",
+    title: "Jungle Rhythm Rescue",
+    description: "Coming soon: rhythm, attention, and timing challenges.",
+    difficulty: "Soon",
+    path: "games/jungle-rhythm-rescue",
+    icon: "music",
+    color: "from-lime-300 via-gold to-coral",
+    enabled: false,
+  },
+];

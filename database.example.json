@@ -1,0 +1,96 @@
+{
+  "admins": {
+    "replace-with-your-auth-uid": true
+  },
+  "analytics": {
+    "visitors": {
+      "count": 0
+    }
+  },
+  "siteContent": {
+    "hero": {
+      "greeting": "Full-stack web developer",
+      "headline": "I build resilient digital products with React, Firebase, and thoughtful UX.",
+      "description": "I design and ship fast, accessible product experiences with a strong focus on realtime data, frontend architecture, and polished interfaces.",
+      "roles": ["Frontend Engineer", "Firebase Architect", "Product-minded Developer"],
+      "primaryCta": {
+        "label": "View Projects",
+        "href": "/projects"
+      },
+      "secondaryCta": {
+        "label": "Let's Talk",
+        "href": "/contact"
+      },
+      "stats": [
+        { "label": "Years building", "value": "6+" },
+        { "label": "Projects shipped", "value": "24" },
+        { "label": "Avg. Lighthouse", "value": "95+" }
+      ]
+    },
+    "about": {
+      "title": "Designing web experiences that feel fast, clear, and alive.",
+      "intro": "I help teams turn product ideas into reliable applications with scalable frontend systems, realtime data, and interfaces people genuinely enjoy using.",
+      "skills": ["React", "Vite", "Firebase", "TypeScript", "Tailwind CSS", "Node.js", "Framer Motion", "REST APIs"],
+      "timeline": [
+        {
+          "title": "Senior Frontend Engineer",
+          "company": "Independent Consulting",
+          "period": "2023 - Present",
+          "description": "Leading design-to-production delivery for internal tools, dashboards, and customer-facing SaaS products."
+        },
+        {
+          "title": "Frontend Developer",
+          "company": "Product Studio",
+          "period": "2020 - 2023",
+          "description": "Built React applications, design systems, and analytics workflows for startups across fintech, education, and commerce."
+        },
+        {
+          "title": "UI Engineer",
+          "company": "Creative Agency",
+          "period": "2018 - 2020",
+          "description": "Delivered responsive marketing sites and interactive product experiences with strong animation and accessibility fundamentals."
+        }
+      ]
+    },
+    "seo": {
+      "title": "Your Name | Developer Portfolio",
+      "description": "Modern developer portfolio powered by React, Firebase Realtime Database, Tailwind CSS, and Framer Motion.",
+      "keywords": ["web developer", "react developer", "firebase developer", "portfolio"],
+      "image": "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80"
+    },
+    "socialLinks": [
+      { "label": "GitHub", "href": "https://github.com/yourusername" },
+      { "label": "LinkedIn", "href": "https://linkedin.com/in/yourusername" },
+      { "label": "X", "href": "https://x.com/yourusername" }
+    ]
+  },
+  "projects": {
+    "saas-analytics-suite": {
+      "title": "SaaS Analytics Suite",
+      "slug": "saas-analytics-suite",
+      "summary": "A high-density analytics dashboard with realtime usage metrics, team permissions, and export workflows.",
+      "description": "Built a polished SaaS analytics platform with React, Firebase, and chart-driven insights. The app supported role-based access, realtime KPI tracking, usage trends, and operational reporting while maintaining excellent performance on mobile and desktop.",
+      "image": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80",
+      "technologies": ["React", "Firebase", "Tailwind CSS", "Framer Motion"],
+      "liveUrl": "https://example.com/analytics",
+      "repoUrl": "https://github.com/yourusername/saas-analytics-suite",
+      "featured": true,
+      "createdAt": 1714300000000,
+      "updatedAt": 1714300000000
+    },
+    "realtime-collaboration-hub": {
+      "title": "Realtime Collaboration Hub",
+      "slug": "realtime-collaboration-hub",
+      "summary": "A collaborative workspace with presence indicators, activity feeds, and low-latency content sync.",
+      "description": "Designed and implemented a collaborative product experience centered on realtime updates, shared workspaces, and responsive interaction states. The system used Firebase for synchronization and focused heavily on clarity, performance, and operational scale.",
+      "image": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+      "technologies": ["React", "Firebase Realtime Database", "Tailwind CSS"],
+      "liveUrl": "https://example.com/collab",
+      "repoUrl": "https://github.com/yourusername/realtime-collaboration-hub",
+      "featured": true,
+      "createdAt": 1714386400000,
+      "updatedAt": 1714386400000
+    }
+  },
+  "messages": {}
+}

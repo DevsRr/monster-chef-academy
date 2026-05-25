@@ -1,0 +1,25 @@
+{
+  "name": "Monster Chef Academy",
+  "short_name": "Monster Chef",
+  "description": "A child-safe cooking-themed brain-training game platform.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f7fb",
+  "theme_color": "#14b8a6",
+  "categories": ["education", "games", "kids"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.svg",
+      "sizes": "180x180",
+      "type": "image/svg+xml"
+    }
+  ]
+}
