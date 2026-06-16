@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { onValue, push, update } from 'firebase/database';
+import { onValue, set, update } from 'firebase/database';
 import { database, dbHelpers, ref } from '@/lib/firebase';
 import type {
   Alert,
@@ -34,6 +34,14 @@ interface Esp32HistoryEntry extends Esp32Current {
   acknowledgedAt?: string;
   acknowledgedBy?: string;
   createdBy?: string;
+}
+
+interface SensorSwitches {
+  green?: number;
+  orange?: number;
+  red?: number;
+  siren?: number;
+  ultrasonic?: number;
 }
 
 export type TimeRange = '1h' | '6h' | '24h' | '1w' | '1m' | '1y';
@@ -195,22 +203,15 @@ const buildChartData = (readings: SensorReading[], range: TimeRange): ChartDataP
   return aggregated;
 };
 
-const getComponentStatus = (
-  reading: SensorReading | null,
-  isConnected: boolean,
-  lastUpdate: Date
-): ComponentStatus => {
-  const updatedRecently = Date.now() - lastUpdate.getTime() <= 30_000;
+const toComponentStatus = (sensors: SensorSwitches): ComponentStatus => ({
+  redLedOnline: sensors.red === 1,
+  orangeLedOnline: sensors.orange === 1,
+  greenLedOnline: sensors.green === 1,
+  ultrasonicOnline: sensors.ultrasonic === 1,
+  sirenOn: sensors.siren === 1,
+});
 
-  return {
-    redLedOnline: reading?.status === 'warning' || reading?.status === 'critical',
-    orangeLedOnline: reading?.status === 'moderate',
-    greenLedOnline: reading?.status === 'normal',
-    ultrasonicOnline: Boolean(reading?.waterLevel !== undefined && isConnected && updatedRecently),
-  };
-};
-
-export const useFloodData = () => {
+export const useFloodData = (listenToSensors = false) => {
   const [station, setStation] = useState<StationData | null>(null);
   const [history, setHistory] = useState<SensorReading[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -234,7 +235,11 @@ export const useFloodData = () => {
     orangeLedOnline: false,
     greenLedOnline: false,
     ultrasonicOnline: false,
+    sirenOn: false,
   });
+  const [sirenOn, setSirenOn] = useState(false);
+  const [sirenLastUpdate, setSirenLastUpdate] = useState<Date>(new Date(0));
+  const [sensorLastUpdate, setSensorLastUpdate] = useState<Date>(new Date(0));
 
   useEffect(() => {
     const currentRef = dbHelpers.getCurrentRef();
@@ -267,8 +272,6 @@ export const useFloodData = () => {
         setLastUpdate(updateTime);
         setIsConnected(true);
         setLoading(false);
-        setComponentStatus(getComponentStatus(reading, true, updateTime));
-
         setStats((previous) => ({
           ...previous,
           activeStations: reading.status !== 'offline' ? 1 : 0,
@@ -288,6 +291,45 @@ export const useFloodData = () => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!listenToSensors) {
+      setComponentStatus({
+        redLedOnline: false,
+        orangeLedOnline: false,
+        greenLedOnline: false,
+        ultrasonicOnline: false,
+        sirenOn: false,
+      });
+      setSirenOn(false);
+      setSirenLastUpdate(new Date(0));
+      setSensorLastUpdate(new Date(0));
+      return;
+    }
+
+    const sensorsRef = dbHelpers.getSensorsRef();
+
+    const unsubscribe = onValue(
+      sensorsRef,
+      (snapshot) => {
+        const sensors = (snapshot.val() ?? {}) as SensorSwitches;
+        const nextStatus = toComponentStatus(sensors);
+        const updateTime = new Date();
+
+        setComponentStatus(nextStatus);
+        setSensorLastUpdate(updateTime);
+        const nextSirenOn = nextStatus.sirenOn;
+        setSirenOn(nextSirenOn);
+        setSirenLastUpdate(updateTime);
+      },
+      () => {
+        setSensorLastUpdate(new Date(0));
+        setSirenLastUpdate(new Date(0));
+      }
+    );
+
+    return () => unsubscribe();
+  }, [listenToSensors]);
 
   useEffect(() => {
     const historyRef = dbHelpers.getHistoryRef(500);
@@ -352,17 +394,6 @@ export const useFloodData = () => {
     setChartData(buildChartData(history, currentTimeRange));
   }, [history, currentTimeRange]);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setComponentStatus((previous) => ({
-        ...previous,
-        ultrasonicOnline: Boolean(station?.currentReading?.waterLevel !== undefined && isConnected && Date.now() - lastUpdate.getTime() <= 30_000),
-      }));
-    }, 5_000);
-
-    return () => window.clearInterval(timer);
-  }, [isConnected, lastUpdate, station?.currentReading?.waterLevel]);
-
   const acknowledgeAlert = useCallback(async (alertId: string, acknowledgedBy = 'System User') => {
     const alert = alerts.find((currentAlert) => currentAlert.id === alertId);
     if (!alert?.recordKey) return;
@@ -374,15 +405,8 @@ export const useFloodData = () => {
     });
   }, [alerts]);
 
-  const createManualAlert = useCallback(async (createdBy: string) => {
-    await push(ref(database, 'floodmonitoring/history'), {
-      status: 'HIGH',
-      waterLevel: 0,
-      source: 'MANUAL',
-      createdBy,
-      time: new Date().toISOString(),
-      acknowledged: false,
-    });
+  const updateSirenStatus = useCallback(async (enabled: boolean) => {
+    await set(ref(database, 'floodmonitoring/sensors/siren'), enabled ? 1 : 0);
   }, []);
 
   const setTimeRange = useCallback((range: TimeRange) => {
@@ -404,9 +428,12 @@ export const useFloodData = () => {
     lastUpdate,
     isConnected,
     componentStatus,
+    sirenOn,
+    sirenLastUpdate,
+    sensorLastUpdate,
     currentTimeRange,
     acknowledgeAlert,
-    createManualAlert,
+    updateSirenStatus,
     setTimeRange,
     getHistoryByTimeRange,
   };

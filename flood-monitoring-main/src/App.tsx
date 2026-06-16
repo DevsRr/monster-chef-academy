@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { onValue, set, update } from 'firebase/database';
+import { onValue } from 'firebase/database';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { Header } from '@/components/dashboard/Header';
@@ -26,60 +25,18 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { auth, dbHelpers, userManagementAuth } from '@/lib/firebase';
+import { auth, dbHelpers } from '@/lib/firebase';
 import { useFloodData, type TimeRange } from '@/hooks/useFloodData';
-import type { AppUser, ChartDataPoint, SensorReading } from '@/types/floodData';
+import type { AppUser, SensorReading } from '@/types/floodData';
 import './App.css';
 
-type UserFormState = {
-  uid?: string;
-  name: string;
-  email: string;
-  password: string;
-  role: 'Admin' | 'User';
-  disabled: boolean;
-};
-
-const emptyUserForm: UserFormState = {
-  name: '',
-  email: '',
-  password: '',
-  role: 'User',
-  disabled: false,
-};
-
 function App() {
-  const {
-    station,
-    history,
-    alerts,
-    stats,
-    chartData,
-    loading,
-    lastUpdate,
-    isConnected,
-    componentStatus,
-    currentTimeRange,
-    acknowledgeAlert,
-    createManualAlert,
-    setTimeRange,
-  } = useFloodData();
-
-  const [displayData, setDisplayData] = useState<ChartDataPoint[]>([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState('');
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [manualAlertOpen, setManualAlertOpen] = useState(false);
-  const [userManagementOpen, setUserManagementOpen] = useState(false);
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm);
-  const [savingUser, setSavingUser] = useState(false);
-  const shownAlertIds = useRef<Set<string>>(new Set());
-
-  const isAdmin = currentUser?.role === 'Admin';
 
   useEffect(() => {
     let unsubscribeUserProfile: (() => void) | undefined;
@@ -97,7 +54,8 @@ function App() {
       const userRef = dbHelpers.getUserRef(firebaseUser.uid);
       unsubscribeUserProfile = onValue(userRef, async (snapshot) => {
         if (!snapshot.exists()) {
-          setAuthMessage('No dashboard role found for this account.');
+          setAuthMessage('No admin profile found for this account.');
+          setLoginOpen(true);
           setCurrentUser(null);
           await signOut(auth);
           setAuthLoading(false);
@@ -106,7 +64,17 @@ function App() {
 
         const profile = snapshot.val() as Omit<AppUser, 'uid'>;
         if (profile.disabled) {
-          setAuthMessage('Account Disabled');
+          setAuthMessage('Account disabled.');
+          setLoginOpen(true);
+          setCurrentUser(null);
+          await signOut(auth);
+          setAuthLoading(false);
+          return;
+        }
+
+        if (profile.role !== 'Admin') {
+          setAuthMessage('Admin access only.');
+          setLoginOpen(true);
           setCurrentUser(null);
           await signOut(auth);
           setAuthLoading(false);
@@ -121,6 +89,7 @@ function App() {
           disabled: false,
         });
         setAuthMessage('');
+        setLoginOpen(false);
         setAuthLoading(false);
       });
     });
@@ -131,34 +100,92 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!isAdmin) {
-      setUsers([]);
-      return;
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthMessage('');
+
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword);
+      setLoginPassword('');
+    } catch {
+      setAuthMessage('Invalid email or password.');
     }
+  };
 
-    const usersRef = dbHelpers.getUsersRef();
-    const unsubscribe = onValue(usersRef, (snapshot) => {
-      const rawUsers = snapshot.val() as Record<string, Omit<AppUser, 'uid'>> | null;
-      const nextUsers = Object.entries(rawUsers ?? {}).map(([uid, profile]) => ({
-        uid,
-        name: profile.name,
-        email: profile.email,
-        role: profile.role,
-        disabled: profile.disabled === true,
-      }));
+  const handleSignOut = async () => {
+    await signOut(auth);
+    setCurrentUser(null);
+  };
 
-      setUsers(nextUsers.sort((a, b) => a.name.localeCompare(b.name)));
-    });
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary mx-auto mb-3 sm:mb-4"></div>
+          <p className="text-sm text-muted-foreground">Checking login...</p>
+        </div>
+      </div>
+    );
+  }
 
-    return () => unsubscribe();
-  }, [isAdmin]);
+  return (
+    <div className="min-h-screen bg-background">
+      <Toaster position="top-right" richColors />
 
-  useEffect(() => {
-    if (chartData.length > 0) {
-      setDisplayData(chartData);
-    }
-  }, [chartData]);
+      <Dashboard
+        user={currentUser}
+        onLogin={() => setLoginOpen(true)}
+        onSignOut={handleSignOut}
+      />
+
+      <LoginModal
+        open={loginOpen && !currentUser}
+        email={loginEmail}
+        password={loginPassword}
+        message={authMessage}
+        onOpenChange={setLoginOpen}
+        onEmailChange={setLoginEmail}
+        onPasswordChange={setLoginPassword}
+        onSubmit={handleLogin}
+      />
+    </div>
+  );
+}
+
+interface DashboardProps {
+  user: AppUser | null;
+  onLogin: () => void;
+  onSignOut: () => Promise<void>;
+}
+
+const Dashboard = ({ user, onLogin, onSignOut }: DashboardProps) => {
+  const isAdmin = user?.role === 'Admin';
+  const {
+    station,
+    history,
+    alerts,
+    stats,
+    chartData,
+    loading,
+    lastUpdate,
+    isConnected,
+    componentStatus,
+    sirenOn,
+    sirenLastUpdate,
+    sensorLastUpdate,
+    currentTimeRange,
+    acknowledgeAlert,
+    updateSirenStatus,
+    setTimeRange,
+  } = useFloodData(isAdmin);
+
+  const shownAlertIds = useRef<Set<string>>(new Set());
+
+  const handleAcknowledge = useCallback(async (alertId: string) => {
+    if (!user) return;
+    await acknowledgeAlert(alertId, user.email);
+    toast.success('Alert acknowledged.');
+  }, [acknowledgeAlert, user]);
 
   useEffect(() => {
     alerts
@@ -183,134 +210,24 @@ function App() {
             : undefined,
         });
       });
-  }, [alerts, isAdmin]);
-
-  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setAuthMessage('');
-
-    try {
-      await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword);
-      setLoginPassword('');
-    } catch {
-      setAuthMessage('Invalid email or password.');
-    }
-  };
-
-  const handleSignOut = async () => {
-    await signOut(auth);
-    setCurrentUser(null);
-    shownAlertIds.current.clear();
-  };
+  }, [alerts, handleAcknowledge, isAdmin]);
 
   const handleRefresh = () => {
     toast.info('Refreshing data...');
-    setDisplayData([...chartData]);
   };
 
   const handleTimeRangeChange = useCallback((range: TimeRange) => {
     setTimeRange(range);
   }, [setTimeRange]);
 
-  const handleAcknowledge = useCallback(async (alertId: string) => {
-    if (!isAdmin || !currentUser) return;
-    await acknowledgeAlert(alertId, currentUser.email);
-    toast.success('Alert acknowledged.');
-  }, [acknowledgeAlert, currentUser, isAdmin]);
-
-  const handleManualAlert = async () => {
-    if (!currentUser) return;
-    await createManualAlert(currentUser.email);
-    setManualAlertOpen(false);
-    toast.success('Manual alert added to history.');
-  };
-
-  const resetUserForm = () => {
-    setUserForm(emptyUserForm);
-  };
-
-  const editUser = (user: AppUser) => {
-    setUserForm({
-      uid: user.uid,
-      name: user.name,
-      email: user.email,
-      password: '',
-      role: user.role,
-      disabled: user.disabled,
-    });
-  };
-
-  const saveUser = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!isAdmin) return;
-
-    setSavingUser(true);
+  const handleSirenToggle = async (enabled: boolean) => {
     try {
-      if (userForm.uid) {
-        await update(dbHelpers.getUserRef(userForm.uid), {
-          name: userForm.name.trim(),
-          email: userForm.email.trim(),
-          role: userForm.role,
-          disabled: userForm.disabled,
-        });
-        toast.success('User updated.');
-      } else {
-        const credential = await createUserWithEmailAndPassword(
-          userManagementAuth,
-          userForm.email.trim(),
-          userForm.password
-        );
-
-        await set(dbHelpers.getUserRef(credential.user.uid), {
-          name: userForm.name.trim(),
-          email: userForm.email.trim(),
-          role: userForm.role,
-          disabled: userForm.disabled,
-        });
-        await signOut(userManagementAuth);
-        toast.success('User added.');
-      }
-
-      resetUserForm();
+      await updateSirenStatus(enabled);
+      toast.success(`Siren turned ${enabled ? 'on' : 'off'}.`);
     } catch {
-      toast.error('Unable to save user. Check the fields and Firebase permissions.');
-    } finally {
-      setSavingUser(false);
+      toast.error('Unable to update siren status.');
     }
   };
-
-  const disableUser = async (user: AppUser) => {
-    if (!isAdmin) return;
-    await update(dbHelpers.getUserRef(user.uid), { disabled: true });
-    toast.success('User disabled.');
-  };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary mx-auto mb-3 sm:mb-4"></div>
-          <p className="text-sm text-muted-foreground">Checking login...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Toaster position="top-right" richColors />
-        <LoginModal
-          email={loginEmail}
-          password={loginPassword}
-          message={authMessage}
-          onEmailChange={setLoginEmail}
-          onPasswordChange={setLoginPassword}
-          onSubmit={handleLogin}
-        />
-      </div>
-    );
-  }
 
   if (loading) {
     return (
@@ -324,17 +241,14 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Toaster position="top-right" richColors />
-
+    <>
       <Header
         lastUpdate={lastUpdate}
         isConnected={isConnected}
         onRefresh={handleRefresh}
-        user={currentUser}
-        onManualAlert={() => setManualAlertOpen(true)}
-        onManageUsers={() => setUserManagementOpen(true)}
-        onSignOut={handleSignOut}
+        user={user}
+        onLogin={onLogin}
+        onSignOut={onSignOut}
       />
 
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
@@ -342,18 +256,27 @@ function App() {
           <StatsCards
             stats={stats}
             currentReading={station?.currentReading}
-            componentStatus={componentStatus}
+            componentStatus={isAdmin ? componentStatus : undefined}
           />
         </section>
 
-        <section className="mb-4 sm:mb-6">
-          <ComponentStatusCard status={componentStatus} />
-        </section>
+        {isAdmin && (
+          <section className="mb-4 sm:mb-6">
+            <ComponentStatusCard
+              status={componentStatus}
+              currentReading={station?.currentReading}
+              lastUpdate={sensorLastUpdate}
+              sirenOn={sirenOn}
+              sirenLastUpdate={sirenLastUpdate}
+              onSirenToggle={handleSirenToggle}
+            />
+          </section>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 mb-4 sm:mb-6">
           <div className="lg:col-span-2">
             <MainChart
-              data={displayData}
+              data={chartData}
               onTimeRangeChange={handleTimeRangeChange}
               currentRange={currentTimeRange}
             />
@@ -372,7 +295,7 @@ function App() {
           <section className="mb-4 sm:mb-6">
             <StationDetail
               station={station}
-              history={displayData}
+              history={chartData}
             />
           </section>
         )}
@@ -395,52 +318,37 @@ function App() {
           </div>
         </footer>
       </main>
-
-      <ManualAlertDialog
-        open={manualAlertOpen}
-        onOpenChange={setManualAlertOpen}
-        onConfirm={handleManualAlert}
-      />
-
-      <UserManagementDialog
-        open={userManagementOpen}
-        users={users}
-        form={userForm}
-        saving={savingUser}
-        onOpenChange={setUserManagementOpen}
-        onChange={setUserForm}
-        onReset={resetUserForm}
-        onEdit={editUser}
-        onDisable={disableUser}
-        onSave={saveUser}
-      />
-    </div>
+    </>
   );
-}
+};
 
 interface LoginModalProps {
+  open: boolean;
   email: string;
   password: string;
   message: string;
+  onOpenChange: (open: boolean) => void;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
 const LoginModal = ({
+  open,
   email,
   password,
   message,
+  onOpenChange,
   onEmailChange,
   onPasswordChange,
   onSubmit,
 }: LoginModalProps) => (
-  <Dialog open>
-    <DialogContent showCloseButton={false} className="sm:max-w-md">
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="sm:max-w-md">
       <form onSubmit={onSubmit} className="space-y-4">
         <DialogHeader>
-          <DialogTitle>FloodMonitor Login</DialogTitle>
-          <DialogDescription>Sign in to view the flood monitoring dashboard.</DialogDescription>
+          <DialogTitle>Admin Login</DialogTitle>
+          <DialogDescription>Sign in with an Admin account to open the monitoring dashboard.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
@@ -477,161 +385,6 @@ const LoginModal = ({
           <Button type="submit" className="w-full">Login</Button>
         </DialogFooter>
       </form>
-    </DialogContent>
-  </Dialog>
-);
-
-interface ManualAlertDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => Promise<void>;
-}
-
-const ManualAlertDialog = ({ open, onOpenChange, onConfirm }: ManualAlertDialogProps) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Create Manual Alert</DialogTitle>
-        <DialogDescription>
-          This writes a HIGH manual alert into the existing history records.
-        </DialogDescription>
-      </DialogHeader>
-      <DialogFooter>
-        <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-        <Button onClick={onConfirm}>Create Alert</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-);
-
-interface UserManagementDialogProps {
-  open: boolean;
-  users: AppUser[];
-  form: UserFormState;
-  saving: boolean;
-  onOpenChange: (open: boolean) => void;
-  onChange: (form: UserFormState) => void;
-  onReset: () => void;
-  onEdit: (user: AppUser) => void;
-  onDisable: (user: AppUser) => Promise<void>;
-  onSave: (event: FormEvent<HTMLFormElement>) => void;
-}
-
-const UserManagementDialog = ({
-  open,
-  users,
-  form,
-  saving,
-  onOpenChange,
-  onChange,
-  onReset,
-  onEdit,
-  onDisable,
-  onSave,
-}: UserManagementDialogProps) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="sm:max-w-3xl">
-      <DialogHeader>
-        <DialogTitle>User Management</DialogTitle>
-        <DialogDescription>Add, edit, or disable dashboard users.</DialogDescription>
-      </DialogHeader>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-4">
-        <form onSubmit={onSave} className="space-y-3 rounded-lg border p-3">
-          <div className="space-y-2">
-            <Label htmlFor="user-name">Name</Label>
-            <Input
-              id="user-name"
-              value={form.name}
-              onChange={(event) => onChange({ ...form, name: event.target.value })}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="user-email">Email</Label>
-            <Input
-              id="user-email"
-              type="email"
-              value={form.email}
-              onChange={(event) => onChange({ ...form, email: event.target.value })}
-              required
-            />
-          </div>
-
-          {!form.uid && (
-            <div className="space-y-2">
-              <Label htmlFor="user-password">Password</Label>
-              <Input
-                id="user-password"
-                type="password"
-                value={form.password}
-                onChange={(event) => onChange({ ...form, password: event.target.value })}
-                minLength={6}
-                required
-              />
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="user-role">Role</Label>
-              <select
-                id="user-role"
-                value={form.role}
-                onChange={(event) => onChange({ ...form, role: event.target.value as 'Admin' | 'User' })}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="Admin">Admin</option>
-                <option value="User">User</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="user-disabled">Status</Label>
-              <select
-                id="user-disabled"
-                value={form.disabled ? 'disabled' : 'active'}
-                onChange={(event) => onChange({ ...form, disabled: event.target.value === 'disabled' })}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="active">Active</option>
-                <option value="disabled">Disabled</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <Button type="submit" disabled={saving} className="flex-1">
-              {form.uid ? 'Update User' : 'Add User'}
-            </Button>
-            <Button type="button" variant="outline" onClick={onReset}>Clear</Button>
-          </div>
-        </form>
-
-        <ScrollArea className="h-[360px] rounded-lg border">
-          <div className="divide-y">
-            {users.map((user) => (
-              <div key={user.uid} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{user.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                  <p className="text-[10px] text-muted-foreground">{user.role} · {user.disabled ? 'Disabled' : 'Active'}</p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button type="button" variant="outline" size="sm" onClick={() => onEdit(user)}>Edit</Button>
-                  <Button type="button" variant="outline" size="sm" disabled={user.disabled} onClick={() => onDisable(user)}>
-                    Disable
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {users.length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">No users found.</p>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
     </DialogContent>
   </Dialog>
 );

@@ -14,13 +14,9 @@ const firebaseConfig = {
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const userManagementApp = getApps().some((firebaseApp) => firebaseApp.name === 'user-management')
-  ? getApp('user-management')
-  : initializeApp(firebaseConfig, 'user-management');
 
 export const database = getDatabase(app);
 export const auth = getAuth(app);
-export const userManagementAuth = getAuth(userManagementApp);
 
 export const DB_PATHS = {
   CURRENT: 'floodmonitoring',
@@ -32,7 +28,7 @@ export const DB_PATHS = {
 
 export const dbHelpers = {
   getCurrentRef: () => {
-    return ref(database, DB_PATHS.CURRENT);
+    return ref(database, DB_PATHS.CURRENT_STATUS);
   },
 
   getHistoryRef: (limit: number = 100) => {
@@ -52,6 +48,10 @@ export const dbHelpers = {
 
   getUserRef: (uid: string) => {
     return ref(database, `${DB_PATHS.USERS}/${uid}`);
+  },
+
+  getSensorsRef: () => {
+    return ref(database, DB_PATHS.SENSORS);
   },
 };
 
